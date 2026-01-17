@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Stack Attack - Web (Enhanced)</title>
+<title>Stack Attack - Web (iOS Style)</title>
 <style>
   body { margin:0; overflow:hidden; background:black; font-family: Arial; }
   canvas { display:block; }
@@ -31,6 +31,8 @@ let world = engine.world;
 engine.gravity.y = 1;
 
 let blocks = [];
+let currentBlock = null;
+let direction = 1;
 let ground;
 let score = 0;
 let level = 1;
@@ -43,7 +45,7 @@ let gameState = 'menu';
 const render = Render.create({
   canvas,
   engine,
-  options: { width: canvas.width, height: canvas.height, wireframes:false, background:'black' }
+  options: { width: canvas.width, height: canvas.height, wireframes:false, background:'#6bb6e5' }
 });
 Render.run(render);
 const runner = Runner.create();
@@ -54,40 +56,51 @@ function setupGround(){
   World.add(world, ground);
 }
 
+function spawnMovingBlock(){
+  const w = blocks.length ? blocks[blocks.length-1].bounds.max.x - blocks[blocks.length-1].bounds.min.x : 80;
+  currentBlock = Bodies.rectangle(canvas.width/2, 80, w, 20, { isStatic:true });
+  World.add(world, currentBlock);
+}
+
 function dropBlock(){
-  if(paused || gameState!=='playing') return;
-  const sizes=[40,60,80];
-  const w=sizes[Math.floor(Math.random()*sizes.length)];
-  const block=Bodies.rectangle(Math.random()*(canvas.width-w)+w/2, 0, w, 20, { restitution:0.1, friction:0.6 });
-  blocks.push(block);
-  World.add(world, block);
+  if(!currentBlock || paused || gameState!=='playing') return;
+  Body.setStatic(currentBlock, false);
+  blocks.push(currentBlock);
+  currentBlock = null;
 }
 
 canvas.addEventListener('click',()=>{
-  if(gameState==='menu') startGame(1);
+  if(gameState==='menu') startGame(5);
   else if(gameState==='playing') dropBlock();
   else if(gameState==='lose') startGame(level);
+});
+
+Events.on(engine,'beforeUpdate',()=>{
+  if(currentBlock && !paused){
+    Body.setPosition(currentBlock, {
+      x: currentBlock.position.x + 3 * direction,
+      y: currentBlock.position.y
+    });
+    if(currentBlock.position.x > canvas.width - 40 || currentBlock.position.x < 40) direction *= -1;
+  }
 });
 
 Events.on(engine,'afterUpdate',()=>{
   if(paused || gameState!=='playing') return;
 
-  // Alien boss shake (levels 5+)
-  if(level>=5 && Math.random()<0.02){
-    blocks.forEach(b=>Body.applyForce(b,b.position,{x:(Math.random()-0.5)*0.02,y:0}));
-  }
-
   let highest = Math.min(...blocks.map(b=>b.position.y), canvas.height);
-  if(canvas.height-highest>targetHeight){
-    score+=500;
+  if(canvas.height-highest > targetHeight){
     level++;
-    targetHeight+=300;
-    if(level>maxLevel) gameState='victory';
+    score += 500;
+    targetHeight += 250;
+    if(level > maxLevel) gameState = 'victory';
   }
 
   blocks.forEach(b=>{
-    if(b.position.y>canvas.height+300) gameState='lose';
+    if(b.position.y > canvas.height + 300) gameState='lose';
   });
+
+  if(!currentBlock && gameState==='playing') spawnMovingBlock();
 });
 
 function togglePause(){ paused=!paused; engine.enabled=!paused; }
@@ -96,30 +109,34 @@ function retry(){ startGame(level); }
 
 function startGame(lvl){
   World.clear(world,false);
-  engine=Engine.create();
-  engine.gravity.y=1+lvl*0.1;
-  world=engine.world;
+  engine = Engine.create();
+  engine.gravity.y = 1 + lvl*0.1;
+  world = engine.world;
   Runner.run(runner,engine);
+
   blocks=[];
+  currentBlock=null;
   score=0;
   level=lvl;
-  targetHeight=300+lvl*250;
+  targetHeight = 300 + lvl*200;
   gameState='playing';
+
   setupGround();
+  spawnMovingBlock();
 }
 
 function drawOverlay(text){
-  const ctx=render.context;
+  const ctx = render.context;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle='white';
   ctx.font='42px Arial';
   ctx.textAlign='center';
-  ctx.fillText(text,canvas.width/2,canvas.height/2);
+  ctx.fillText(text, canvas.width/2, canvas.height/2);
 }
 
 (function loop(){
   requestAnimationFrame(loop);
-  document.getElementById('info').innerText=`Level ${level} | Score ${score}`;
+  document.getElementById('info').innerText = `Level ${level} | Score ${score}`;
   if(gameState==='menu') drawOverlay('STACK ATTACK – Click to Start');
   if(gameState==='victory') drawOverlay('PRINCESS SAVED!');
   if(gameState==='lose') drawOverlay('YOU LOSE – Click to Retry');
@@ -127,5 +144,7 @@ function drawOverlay(text){
 </script>
 </body>
 </html>
+
+
 
 
