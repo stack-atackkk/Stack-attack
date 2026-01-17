@@ -2,204 +2,130 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Stack Attack</title>
+<title>Stack Attack - Web (Enhanced)</title>
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: black;
-    font-family: Arial, sans-serif;
-  }
-  canvas {
-    display: block;
-  }
-  #ui {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    color: white;
-    z-index: 10;
-  }
-  button {
-    margin: 4px;
-    padding: 6px 10px;
-    font-size: 14px;
-  }
+  body { margin:0; overflow:hidden; background:black; font-family: Arial; }
+  canvas { display:block; }
+  #ui { position: fixed; top: 10px; left: 10px; color:white; z-index:10; }
+  button { margin: 4px; padding: 6px 10px; font-size: 14px; }
 </style>
 </head>
 <body>
-
 <div id="ui">
   <div id="info"></div>
   <button onclick="togglePause()">Pause</button>
   <button onclick="toggleSound()">Sound</button>
   <button onclick="retry()">Retry</button>
 </div>
-
 <canvas id="game"></canvas>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+const canvas = document.getElementById('game');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let blocks = [];
-let gravity = 0.5;
-let paused = false;
-let soundOn = true;
+let engine = Engine.create();
+let world = engine.world;
+engine.gravity.y = 1;
 
+let blocks = [];
+let ground;
+let score = 0;
 let level = 1;
 let maxLevel = 7;
-let score = 0;
 let targetHeight = 300;
+let paused = false;
+let soundOn = true;
+let gameState = 'menu';
 
-let gameState = "menu";
+const render = Render.create({
+  canvas,
+  engine,
+  options: { width: canvas.width, height: canvas.height, wireframes:false, background:'black' }
+});
+Render.run(render);
+const runner = Runner.create();
+Runner.run(runner, engine);
 
-const groundHeight = 30;
-
-function resetGame(lvl = 1) {
-  blocks = [];
-  gravity = 0.5 + lvl * 0.1;
-  level = lvl;
-  score = 0;
-  targetHeight = 300 + lvl * 200;
-  gameState = "playing";
+function setupGround(){
+  ground = Bodies.rectangle(canvas.width/2, canvas.height-20, canvas.width, 40, { isStatic:true });
+  World.add(world, ground);
 }
 
-function dropBlock() {
-  if (paused || gameState !== "playing") return;
-
-  const sizes = [40, 60, 80];
-  const w = sizes[Math.floor(Math.random() * sizes.length)];
-
-  blocks.push({
-    x: Math.random() * (canvas.width - w),
-    y: -50,
-    w: w,
-    h: 20,
-    vy: 0
-  });
+function dropBlock(){
+  if(paused || gameState!=='playing') return;
+  const sizes=[40,60,80];
+  const w=sizes[Math.floor(Math.random()*sizes.length)];
+  const block=Bodies.rectangle(Math.random()*(canvas.width-w)+w/2, 0, w, 20, { restitution:0.1, friction:0.6 });
+  blocks.push(block);
+  World.add(world, block);
 }
 
-canvas.addEventListener("click", dropBlock);
-
-function update() {
-  if (paused || gameState !== "playing") return;
-
-  blocks.forEach(b => {
-    b.vy += gravity;
-    b.y += b.vy;
-
-    if (b.y + b.h >= canvas.height - groundHeight) {
-      b.y = canvas.height - groundHeight - b.h;
-      b.vy = 0;
-    }
-  });
-
-  const maxHeight = Math.max(...blocks.map(b => canvas.height - b.y), 0);
-
-  if (maxHeight >= targetHeight) {
-    level++;
-    score += 300;
-    targetHeight += 250;
-
-    if (level > maxLevel) {
-      gameState = "victory";
-    }
-  }
-
-  // Lose condition
-  blocks.forEach(b => {
-    if (b.y > canvas.height + 200) {
-      gameState = "lose";
-    }
-  });
-}
-
-function drawBackground() {
-  if (level <= 2) ctx.fillStyle = "#5dade2";       // Sky
-  else if (level <= 3) ctx.fillStyle = "#76448a"; // Upper sky
-  else if (level <= 4) ctx.fillStyle = "#1c2833"; // Space
-  else if (level <= 5) ctx.fillStyle = "#641e16"; // Alien mothership
-  else ctx.fillStyle = "#512e5f";                  // Princess level
-
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (gameState === "menu") {
-    ctx.fillStyle = "white";
-    ctx.font = "48px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("STACK ATTACK", canvas.width / 2, canvas.height / 2 - 60);
-
-    ctx.font = "24px Arial";
-    ctx.fillText("Click to Start", canvas.width / 2, canvas.height / 2);
-    return;
-  }
-
-  if (gameState === "victory") {
-    ctx.fillStyle = "white";
-    ctx.font = "42px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("PRINCESS SAVED!", canvas.width / 2, canvas.height / 2);
-    return;
-  }
-
-  if (gameState === "lose") {
-    ctx.fillStyle = "white";
-    ctx.font = "42px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("YOU LOSE", canvas.width / 2, canvas.height / 2);
-    return;
-  }
-
-  drawBackground();
-
-  // Ground
-  ctx.fillStyle = "#5d4037";
-  ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
-
-  // Blocks
-  ctx.fillStyle = "#f4d03f";
-  blocks.forEach(b => {
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-  });
-
-  document.getElementById("info").innerText =
-    `Level ${level} | Score ${score}`;
-}
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-function togglePause() {
-  paused = !paused;
-}
-
-function toggleSound() {
-  soundOn = !soundOn;
-  alert(soundOn ? "Sound ON" : "Sound OFF");
-}
-
-function retry() {
-  resetGame(level);
-}
-
-canvas.addEventListener("click", () => {
-  if (gameState === "menu") resetGame();
-  if (gameState === "lose") resetGame(level);
+canvas.addEventListener('click',()=>{
+  if(gameState==='menu') startGame(1);
+  else if(gameState==='playing') dropBlock();
+  else if(gameState==='lose') startGame(level);
 });
 
-loop();
-</script>
+Events.on(engine,'afterUpdate',()=>{
+  if(paused || gameState!=='playing') return;
 
+  // Alien boss shake (levels 5+)
+  if(level>=5 && Math.random()<0.02){
+    blocks.forEach(b=>Body.applyForce(b,b.position,{x:(Math.random()-0.5)*0.02,y:0}));
+  }
+
+  let highest = Math.min(...blocks.map(b=>b.position.y), canvas.height);
+  if(canvas.height-highest>targetHeight){
+    score+=500;
+    level++;
+    targetHeight+=300;
+    if(level>maxLevel) gameState='victory';
+  }
+
+  blocks.forEach(b=>{
+    if(b.position.y>canvas.height+300) gameState='lose';
+  });
+});
+
+function togglePause(){ paused=!paused; engine.enabled=!paused; }
+function toggleSound(){ soundOn=!soundOn; alert(soundOn?'Sound ON':'Sound OFF'); }
+function retry(){ startGame(level); }
+
+function startGame(lvl){
+  World.clear(world,false);
+  engine=Engine.create();
+  engine.gravity.y=1+lvl*0.1;
+  world=engine.world;
+  Runner.run(runner,engine);
+  blocks=[];
+  score=0;
+  level=lvl;
+  targetHeight=300+lvl*250;
+  gameState='playing';
+  setupGround();
+}
+
+function drawOverlay(text){
+  const ctx=render.context;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='white';
+  ctx.font='42px Arial';
+  ctx.textAlign='center';
+  ctx.fillText(text,canvas.width/2,canvas.height/2);
+}
+
+(function loop(){
+  requestAnimationFrame(loop);
+  document.getElementById('info').innerText=`Level ${level} | Score ${score}`;
+  if(gameState==='menu') drawOverlay('STACK ATTACK – Click to Start');
+  if(gameState==='victory') drawOverlay('PRINCESS SAVED!');
+  if(gameState==='lose') drawOverlay('YOU LOSE – Click to Retry');
+})();
+</script>
 </body>
 </html>
+
 
